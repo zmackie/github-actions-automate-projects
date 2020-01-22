@@ -98,6 +98,7 @@ func main() {
 		ctx:      ctx,
 		client:   client,
 		columnID: columnID,
+		issue:    payload,
 	}
 
 	errCheck(d.Run())
@@ -284,6 +285,8 @@ type ZanderAction struct {
 
 func (d ZanderAction) Run() error {
 	opt := &github.ProjectCardOptions{}
+	infoLog("Issue came in with %v", d.issue.Issue)
+
 	opt.Note = d.issue.Issue.GetTitle()
 
 	return actionBookKeeping(opt, d)

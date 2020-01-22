@@ -1,6 +1,6 @@
 IMAGE_NAME=github-actions-automate-projects
 IMG_REPO=gcr.io/cncf-buildpacks-ci/pm
-TAG_NAME=latest
+TAG_NAME ?= latest
 BUILDER=cloudfoundry/cnb:tiny
 
 #
@@ -14,7 +14,7 @@ publish: build-local --publish
 #
 .PHONY: build-local
 build-local:
-	pack build -v ${IMG_REPO}/${IMAGE_NAME}:${TAG_NAME} --builder ${BUILDER}
+	pack build -v ${IMG_REPO}/${IMAGE_NAME}:$(TAG_NAME) --builder ${BUILDER}
 
 .PHONY: build-publish
 build-publish:
