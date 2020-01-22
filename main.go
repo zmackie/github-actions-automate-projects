@@ -27,14 +27,15 @@ func main() {
 	// eventID stores issue ID or pull-request ID
 	var eventID int64
 	var err error
+	var payload github.IssuesEvent
 	if eventName == "issues" {
-		payload := issueEventPayload()
+		payload = issueEventPayload()
 		eventID, err = extractIssueID(payload)
 		errCheck(err)
-	} else if eventName == "pull_request" {
-		payload := pullRequestEventPayload()
-		eventID, err = extractPullRequestID(payload)
-		errCheck(err)
+		// } else if eventName == "pull_request" {
+		// 	payload := pullRequestEventPayload()
+		// 	eventID, err = extractPullRequestID(payload)
+		// 	errCheck(err)
 	}
 
 	infoLog("Payload for %s extract correctly", eventName)
@@ -83,8 +84,23 @@ func main() {
 	////
 	// Add a new opened issue to a designate project column
 	////
-	err = addToProject(ctx, client, eventID, columnID, eventName)
-	errCheck(err)
+
+	var d CardAction
+	d = DefaultCardAction{
+		ctx:       ctx,
+		client:    client,
+		eventID:   eventID,
+		columnID:  columnID,
+		eventName: eventName,
+	}
+
+	d = ZanderAction{
+		ctx:      ctx,
+		client:   client,
+		columnID: columnID,
+	}
+
+	errCheck(d.Run())
 
 	os.Exit(0)
 }
@@ -223,18 +239,66 @@ func projectColumnID(ctx context.Context, client *github.Client, pjID int64, pjC
 	return columnID, nil
 }
 
-func addToProject(ctx context.Context, client *github.Client, eventID, columnID int64, eventName string) error {
+// CardAction is for defining callbacks for how to create cards
+type CardAction interface {
+	Run() error
+	GetContext() context.Context
+	GetClient() *github.Client
+	GetColumnID() int64
+}
+
+// DefaultCardAction describes the current behavior
+type DefaultCardAction struct {
+	ctx       context.Context
+	client    *github.Client
+	eventID   int64
+	columnID  int64
+	eventName string
+}
+
+func (d DefaultCardAction) Run() error {
+	// ctx context.Context, client *github.Client, eventID, columnID int64, eventName string
 	opt := &github.ProjectCardOptions{}
 
-	if eventName == "issues" {
-		opt.ContentID = eventID
+	if d.eventName == "issues" {
+		opt.ContentID = d.eventID
 		opt.ContentType = "Issue"
-	} else if eventName == "pull_request" {
-		opt.ContentID = eventID
+	} else if d.eventName == "pull_request" {
+		opt.ContentID = d.eventID
 		opt.ContentType = "PullRequest"
 	}
 
-	card, res, err := client.Projects.CreateProjectCard(ctx, columnID, opt)
+	return actionBookKeeping(opt, d)
+}
+
+func (d DefaultCardAction) GetContext() context.Context { return d.ctx }
+func (d DefaultCardAction) GetClient() *github.Client   { return d.client }
+func (d DefaultCardAction) GetColumnID() int64          { return d.columnID }
+
+type ZanderAction struct {
+	ctx      context.Context
+	client   *github.Client
+	issue    github.IssuesEvent
+	columnID int64
+}
+
+func (d ZanderAction) Run() error {
+	opt := &github.ProjectCardOptions{}
+	opt.Note = d.issue.Issue.GetTitle()
+
+	return actionBookKeeping(opt, d)
+}
+
+func (d ZanderAction) GetContext() context.Context { return d.ctx }
+func (d ZanderAction) GetClient() *github.Client   { return d.client }
+func (d ZanderAction) GetColumnID() int64          { return d.columnID }
+
+func actionBookKeeping(opt *github.ProjectCardOptions, d CardAction) error {
+	cl := d.GetClient()
+	if cl == nil {
+		return errors.New("failed to fetch github client")
+	}
+	card, res, err := cl.Projects.CreateProjectCard(d.GetContext(), d.GetColumnID(), opt)
 
 	err = validateGitHubResponse(res, err)
 	if err != nil {
@@ -245,7 +309,7 @@ func addToProject(ctx context.Context, client *github.Client, eventID, columnID 
 		return errors.New("Failed to create a card")
 	}
 
-	infoLog("Created card %d! issue %d is placed to ColumnID %d", card.GetID(), eventID, columnID)
+	// infoLog("Created card %d! issue %d is placed to ColumnID %d", card.GetID(), d.eventID, d.columnID)
 	return nil
 }
 

@@ -7,3 +7,5 @@ require (
 	golang.org/x/oauth2 v0.0.0-20190402181905-9f3314589c9a
 	gopkg.in/go-playground/webhooks.v5 v5.9.0
 )
+
+go 1.13
